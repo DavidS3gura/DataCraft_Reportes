@@ -1,0 +1,161 @@
+/*
+ * DataCraft Reportes
+ * Desarrollado por Dev DataCraft - Ing. Ivan Mejia
+ */
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ReportStatus {
+  REPORTED
+  UNDER_REVIEW
+  IN_PROGRESS
+  RESOLVED
+  REJECTED
+}
+
+model User {
+  id           String         @id @default(uuid())
+  email        String         @unique
+  passwordHash String
+  name         String
+  role         Role           @default(ADMIN)
+  isActive     Boolean        @default(true)
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  comments     ReportComment[]
+  history      StatusHistory[]
+  refreshTokens RefreshToken[]
+  auditLogs    AuditLog[]
+}
+
+model Location {
+  id        String          @id @default(uuid())
+  name      String
+  sortOrder Int             @default(0)
+  isActive  Boolean         @default(true)
+  areas     LocationArea[]
+  reports   Report[]
+  createdAt DateTime        @default(now())
+}
+
+model LocationArea {
+  id         String          @id @default(uuid())
+  name       String
+  sortOrder  Int             @default(0)
+  isActive   Boolean         @default(true)
+  locationId String
+  location   Location        @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  places     LocationPlace[]
+  reports    Report[]
+  @@unique([locationId, name])
+}
+
+model LocationPlace {
+  id      String        @id @default(uuid())
+  name    String
+  isActive Boolean       @default(true)
+  areaId  String
+  area    LocationArea  @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  reports Report[]
+  @@unique([areaId, name])
+}
+
+model Report {
+  id           String          @id @default(uuid())
+  sequence     Int             @unique @default(autoincrement())
+  code         String          @unique
+  reporterName String
+  description  String
+  priority     Priority
+  status       ReportStatus    @default(REPORTED)
+  locationId   String
+  areaId       String
+  placeId      String
+  location     Location        @relation(fields: [locationId], references: [id])
+  area         LocationArea    @relation(fields: [areaId], references: [id])
+  place        LocationPlace   @relation(fields: [placeId], references: [id])
+  images       ReportImage[]
+  statusHistory StatusHistory[]
+  comments     ReportComment[]
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  resolvedAt   DateTime?
+  rejectedReason String?
+  @@index([status])
+  @@index([priority])
+  @@index([createdAt])
+}
+
+model ReportImage {
+  id           String   @id @default(uuid())
+  reportId     String
+  storageKey   String
+  originalName String
+  mimeType     String
+  size         Int
+  createdAt    DateTime @default(now())
+  report       Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+}
+
+model StatusHistory {
+  id        String       @id @default(uuid())
+  reportId  String
+  userId    String?
+  from      ReportStatus?
+  to        ReportStatus
+  note      String?
+  createdAt DateTime     @default(now())
+  report   Report       @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  user     User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  @@index([reportId, createdAt])
+}
+
+model ReportComment {
+  id        String   @id @default(uuid())
+  reportId  String
+  userId    String
+  body      String
+  isPublic  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  report    Report   @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  action     String
+  entity     String
+  entityId   String?
+  values     Json?
+  createdAt  DateTime @default(now())
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  @@index([entity, entityId])
+}
