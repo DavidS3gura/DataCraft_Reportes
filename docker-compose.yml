@@ -28,6 +28,7 @@ services:
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-datacraft}:${POSTGRES_PASSWORD:-datacraft_dev}@postgres:5432/${POSTGRES_DB:-datacraft_reportes}?schema=public
       STORAGE_PATH: /app/storage/uploads
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8080}
     ports:
       - "3000:3000"
     volumes:

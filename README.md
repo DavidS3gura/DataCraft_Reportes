@@ -1,145 +1,146 @@
-# DataCraft Reportes
+# Datacraft Reportes - Guía de despliegue en servidor
 
-PWA mobile-first para registrar novedades de infraestructura con evidencia fotográfica y gestionar su ciclo de atención.
+## Estado actual del servidor (62.171.181.18)
 
-## Requisitos
+| Servicio | Dominio | Puerto/Tecnología |
+|---|---|---|
+| Moodle | https://www.ineansastem.com | Nginx 80/443 |
+| Sitio aprendizaje autónomo móvil | https://aprendizaje-autonomo-movil.ineansastem.com | Nginx 80/443 |
+| Backend Datacraft | `http://127.0.0.1:3000` | Docker, network_mode host |
+| Frontend Datacraft `dist` | Pendiente de desplegar | `/root/deploy/datacraft/dist` |
 
-- Docker Desktop 24+ con Docker Compose
-- O Node.js 20+ y PostgreSQL 16+ para desarrollo local
+## Credenciales de admin
 
-## Inicio rápido con Docker (recomendado)
+- **Correo:** `admin@ineansastem.com`
+- **Contraseña:** `Admin2026!`
 
-En Windows instala Docker Desktop. En macOS instala Docker Desktop. En Linux instala Docker Engine y el plugin `docker compose`.
+## Cómo se levantó el backend
 
-```bash
-cp .env.example .env
-docker compose up -d --build
-docker compose exec backend npx prisma migrate deploy
-docker compose exec backend npm run prisma:seed
-```
-
-Abre:
-
-- Aplicación: http://localhost:8080
-- API y health check: http://localhost:3000/api/health
-- Swagger: http://localhost:3000/api/docs
-
-En Windows PowerShell, el primer comando equivalente es:
-
-```powershell
-Copy-Item .env.example .env
-docker compose up -d --build
-docker compose exec backend npx prisma migrate deploy
-docker compose exec backend npm run prisma:seed
-```
-
-Para apagar los servicios sin borrar los datos:
+Ejecutar el script (Actualmente ya se ejecuto):
 
 ```bash
-docker compose down
+cd /root/deploy/datacraft
+bash deploy-backend.sh
 ```
 
-Para borrar también la base de datos y las fotografías persistidas:
+
+Esto hace:
+
+1. Crea `.env` con `DATABASE_URL`.
+2. Crea `create-admin.js` y `docker-compose.backend.yml`.
+3. Genera el `dist` del frontend en `/root/deploy/datacraft/dist`.
+4. Levanta solo el backend contra el PostgreSQL del sistema.
+
+## Verificar que el backend funciona
 
 ```bash
-docker compose down -v
+curl -I http://127.0.0.1:3000/api/health
 ```
 
-Usa este último comando únicamente si quieres empezar desde cero.
+Debe devolver `HTTP/1.1 200 OK`.
 
-Credenciales demo del panel:
+## Cómo desplegar el frontend
+
+El `dist` ya está compilado con `VITE_API_URL=/api`. El admin debe:
+
+1. Elegir un dominio, por ejemplo `https://www.reportes.ineansastem.com`.
+2. Crear el registro DNS **A** apuntando a `62.171.181.18`.
+3. Copiar el `dist` al servidor web:
+
+```bash
+mkdir -p /var/www/reportes.ineansastem.com
+cp -r /root/deploy/datacraft/dist/* /var/www/reportes.ineansastem.com/
+```
+
+4. Agregar un sitio en nginx, por ejemplo `/etc/nginx/sites-available/reportes.ineansastem.com`:
+
+```nginx
+server {
+    listen 80;
+    listen [::]:80;
+    server_name reportes.ineansastem.com www.reportes.ineansastem.com;
+
+    location / {
+        root /var/www/reportes.ineansastem.com;
+        index index.html;
+        try_files $uri $uri/ /index.html;
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+5. Habilitarlo y recargar nginx:
+
+```bash
+ln -sf /etc/nginx/sites-available/reportes.ineansastem.com /etc/nginx/sites-enabled/
+nginx -t
+systemctl reload nginx
+```
+
+6. Sacar certificado SSL:
+
+```bash
+certbot --nginx -d reportes.ineansastem.com -d www.reportes.ineansastem.com
+```
+
+7. Editar el `FRONTEND_URL` del backend:
+
+```bash
+nano /root/deploy/datacraft/.env
+```
+
+Cambiar `FRONTEND_URL` por el dominio real del frontend, ejemplo:
 
 ```text
-Correo: admin@datacraft.local
-Contraseña: DataCraft2026!
+FRONTEND_URL=https://www.reportes.ineansastem.com
 ```
 
-> Cambia las variables `JWT_*` y la contraseña demo antes de cualquier uso real.
-
-## Desarrollo local sin contenedor de aplicación
-
-Esta opción sigue usando PostgreSQL. Puedes arrancar solo PostgreSQL con Docker:
+8. Reiniciar el backend:
 
 ```bash
-cp .env.example .env
-docker compose up -d postgres
+cd /root/deploy/datacraft
+docker compose -f docker-compose.backend.yml restart backend
 ```
 
-Como el backend correrá directamente en tu PC, cambia en `.env` el host de `postgres` a `localhost`:
+## Comandos útiles
 
-```text
-DATABASE_URL=postgresql://datacraft:datacraft_dev@localhost:5432/datacraft_reportes?schema=public
-```
-
-Si tienes PostgreSQL instalado directamente, crea antes una base llamada `datacraft_reportes` y asegúrate de que el usuario y contraseña coincidan.
-
-En una terminal, levanta el backend:
+Reiniciar backend:
 
 ```bash
-cd datacraft-reportes/backend
-npm install
-npx prisma generate
-npx prisma migrate deploy
-npm run prisma:seed
-npm run start:dev
+cd /root/deploy/datacraft
+docker compose -f docker-compose.backend.yml restart backend
 ```
 
-En otra terminal, levanta el frontend:
+Ver logs:
 
 ```bash
-cd datacraft-reportes/frontend
-npm install
-npm run dev
+docker logs datacraft-reportes-backend --tail 40
 ```
 
-Abre http://localhost:5173. El frontend usa `VITE_API_URL` (por defecto `http://localhost:3000/api`).
-
-Si modificas el esquema Prisma durante el desarrollo, usa:
+Ver estado de contenedores:
 
 ```bash
-cd backend
-npx prisma migrate dev --name nombre_del_cambio
+docker compose -f docker-compose.backend.yml ps
 ```
 
-## Verificación rápida
+Regenerar `dist` y reiniciar backend:
 
 ```bash
-curl http://localhost:3000/api/health
+cd /root/deploy/datacraft
+bash deploy-backend.sh
 ```
 
-Debe responder con `{"status":"ok","service":"datacraft-reportes"}`. En PowerShell puedes usar:
+## Importante
 
-```powershell
-Invoke-RestMethod http://localhost:3000/api/health
-```
-
-Prueba el panel con `http://localhost:8080` (Docker) o `http://localhost:5173` (desarrollo local).
-
-## Arquitectura
-
-- `frontend/`: React + TypeScript + Vite, React Router, TanStack Query, React Hook Form, Zod y PWA.
-- `backend/`: NestJS + Prisma + PostgreSQL, JWT con refresh tokens, validación y almacenamiento de imágenes desacoplado.
-- `storage/`: volumen local de evidencias; `StorageService` permite reemplazarlo por S3/R2/MinIO.
-- `docs/`: decisiones y avance de implementación.
-
-Las imágenes no se guardan como Base64: solo sus metadatos viven en PostgreSQL y el archivo se conserva en el volumen de almacenamiento.
-
-## API principal
-
-- `GET /api/locations/public`
-- `POST /api/reports` (multipart: `images`, `reporterName`, `locationId`, `areaId`, `placeId`, `description`, `priority`)
-- `GET /api/reports/code/:code`
-- `POST /api/auth/login`
-- `GET /api/admin/dashboard`
-- `GET /api/admin/reports`
-- `GET /api/admin/reports/:id`
-- `PATCH /api/admin/reports/:id/status`
-- `POST /api/admin/reports/:id/comments`
-
-## Producción
-
-Genera builds con `npm run build` dentro de `backend/` y `frontend/`. Para publicar, cambia secretos, CORS, credenciales de base de datos y el backend de almacenamiento.
-
-## Alcance V1.0
-
-Incluye creación pública de reportes, 1–3 imágenes, consulta por código, autenticación de administración, dashboard, filtros, historial, comentarios, auditoría, PWA, Docker y seeds. No incluye notificaciones, IA, WhatsApp, técnicos, inventario ni aplicaciones nativas.
+- **No tocar** los puertos `80` y `443` ni la configuración de Moodle y aprendizaje.
+- El backend escucha en `3000`.
+- El `dist` usa rutas relativas `/api`, así que el proxy de `/api` al backend es obligatorio.
+- El PostgreSQL de datacraft está en el servicio del sistema, no en Docker.
