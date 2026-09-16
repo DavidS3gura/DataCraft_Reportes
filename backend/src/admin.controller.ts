@@ -9,6 +9,7 @@ import { Request } from 'express';
 import { AuthUser, JwtAuthGuard, Roles, RolesGuard } from './auth';
 import { AuthService } from './auth.service';
 import { ReportsService } from './reports.service';
+import { SettingsService } from './settings.service';
 
 class StatusDto {
   @IsEnum(ReportStatus) status!: ReportStatus;
@@ -32,11 +33,16 @@ class UpdateUserDto {
 class ResetPasswordDto {
   @IsString() @MinLength(4) @MaxLength(100) password!: string;
 }
+class UpdateSettingsDto {
+  @IsOptional() @IsString() @MaxLength(50) notificationPhone?: string;
+  @IsOptional() @IsString() @MaxLength(500) notificationUrl?: string;
+  @IsOptional() @IsBoolean() notificationEnabled?: boolean;
+}
 
 @Controller('admin')
 @UseGuards(JwtAuthGuard)
 export class AdminController {
-  constructor(private readonly reports: ReportsService, private readonly auth: AuthService) {}
+  constructor(private readonly reports: ReportsService, private readonly auth: AuthService, private readonly settings: SettingsService) {}
   @Get('dashboard') dashboard() { return this.reports.dashboard(); }
   @Get('reports') list(@Query() query: Record<string, string>) { return this.reports.list(query); }
   @Get('reports/:id') detail(@Param('id') id: string) { return this.reports.detail(id); }
@@ -73,4 +79,10 @@ export class AdminController {
   @Roles(Role.SUPER_ADMIN)
   @UseGuards(JwtAuthGuard, RolesGuard)
   deleteUser(@Param('id') id: string, @Req() req: Request & { user: AuthUser }) { return this.auth.deleteUser(req.user.role, req.user.sub, id); }
+
+  @Get('settings')
+  getSettings() { return this.settings.get(); }
+
+  @Patch('settings')
+  updateSettings(@Body() body: UpdateSettingsDto) { return this.settings.update(body); }
 }

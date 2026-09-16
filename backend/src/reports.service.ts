@@ -6,6 +6,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma, Priority, ReportStatus } from '@prisma/client';
 import { PrismaService } from './prisma.service';
 import { StorageService } from './storage.service';
+import { NotificationsService } from './notifications.service';
 import { randomUUID } from 'node:crypto';
 
 const reportInclude = {
@@ -17,7 +18,7 @@ const reportInclude = {
 
 @Injectable()
 export class ReportsService {
-  constructor(private readonly prisma: PrismaService, private readonly storage: StorageService) {}
+  constructor(private readonly prisma: PrismaService, private readonly storage: StorageService, private readonly notifications: NotificationsService) {}
 
   async locations() { return this.prisma.location.findMany({ where: { isActive: true }, include: { areas: { include: { places: true } } } }); }
 
@@ -61,6 +62,7 @@ export class ReportsService {
         const code = `INC-${created.createdAt.getFullYear()}-${String(created.sequence).padStart(6, '0')}`;
         return tx.report.update({ where: { id: created.id }, data: { code }, include: reportInclude });
       });
+      await this.notifications.sendReportCreated(report);
       return this.publicShape(report);
     } catch (error) {
       await Promise.all(stored.map(({ key }) => this.storage.remove(key)));

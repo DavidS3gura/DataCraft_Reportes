@@ -159,3 +159,12 @@ model AuditLog {
   user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   @@index([entity, entityId])
 }
+
+model AppSettings {
+  id                  String   @id @default(uuid())
+  notificationPhone   String?
+  notificationUrl     String?
+  notificationEnabled Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
