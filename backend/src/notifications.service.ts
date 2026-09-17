@@ -68,6 +68,7 @@ https://reportesineansa.datacraft.website`;
     const accountSid = process.env.TWILIO_ACCOUNT_SID;
     const authToken = process.env.TWILIO_AUTH_TOKEN;
     const from = process.env.TWILIO_WHATSAPP_FROM;
+    const contentSid = process.env.TWILIO_WHATSAPP_CONTENT_SID;
 
     if (!accountSid || !authToken || !from) {
       this.logger.warn('Faltan variables de entorno de Twilio: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN o TWILIO_WHATSAPP_FROM');
@@ -81,12 +82,20 @@ https://reportesineansa.datacraft.website`;
     }
 
     const to = `whatsapp:${phone}`;
-    const body = this.buildMessage(report);
 
     try {
       const client = twilio(accountSid, authToken);
-      const message = await client.messages.create({ body, from, to });
-      this.logger.log(`WhatsApp enviado. SID: ${message.sid}`);
+      const payload: any = { from, to };
+
+      if (contentSid) {
+        payload.contentSid = contentSid;
+        this.logger.warn('Enviando WhatsApp con ContentSid (modo Sandbox/Trial). El mensaje dinámico se conserva para la implementación definitiva.');
+      } else {
+        payload.body = this.buildMessage(report);
+      }
+
+      const message = await client.messages.create(payload);
+      this.logger.log(`WhatsApp enviado. SID: ${message.sid} | status: ${message.status}`);
     } catch (error: any) {
       if (error?.code === 21608 || error?.message?.toLowerCase().includes('not a valid')) {
         this.logger.error(`El destinatario ${phone} no ha sido vinculado al Sandbox de Twilio. Debe enviar "join twilio-trial" a ${from}.`);
