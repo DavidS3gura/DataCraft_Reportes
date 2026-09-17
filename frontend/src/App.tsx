@@ -119,11 +119,11 @@ function AdminSettings() {
 
   if (isLoading) return <Shell admin><main className="page center-state"><div className="loader" /></main></Shell>;
 
-  return <Shell admin><main className="page admin-page"><div className="page-heading"><Link to="/admin" className="back-link">← Dashboard</Link><div className="eyebrow">CONFIGURACIÓN</div><h1>Notificaciones</h1><p>Configura el número y el webhook para notificar cuando llegue un nuevo reporte.</p></div>
+  return <Shell admin><main className="page admin-page"><div className="page-heading"><Link to="/admin" className="back-link">← Dashboard</Link><div className="eyebrow">CONFIGURACIÓN</div><h1>Notificaciones</h1><p>Configura el número destino y activa las notificaciones por WhatsApp cuando llegue un nuevo reporte.</p></div>
     <section className="form-card">
       <form onSubmit={(e) => { e.preventDefault(); save.mutate(); }}>
         <Field label="Número de destino"><input value={form.notificationPhone} onChange={e => setForm({ ...form, notificationPhone: e.target.value })} placeholder="Ej. +573001234567" /></Field>
-        <Field label="URL del webhook"><input value={form.notificationUrl} onChange={e => setForm({ ...form, notificationUrl: e.target.value })} placeholder="https://tu-servicio.com/api/mensaje" /></Field>
+        <Field label="URL de webhook (integración avanzada — no usada actualmente)"><input value={form.notificationUrl} onChange={e => setForm({ ...form, notificationUrl: e.target.value })} placeholder="Opcional" /></Field>
         <label className="public-check"><input type="checkbox" checked={form.notificationEnabled} onChange={e => setForm({ ...form, notificationEnabled: e.target.checked })} /> <span>Activar notificaciones</span></label>
         {error && <div className="error-banner">{error}</div>}
         {success && <div className="success-banner">{success}</div>}
